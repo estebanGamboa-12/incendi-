@@ -51,6 +51,12 @@
   .save { background:var(--red); color:#fff; }
   .save:disabled { opacity:.5; }
   .leaflet-popup-content button { border:none; border-radius:6px; padding:6px; width:100%; margin-top:8px; background:#16a34a; color:#fff; font-weight:600; cursor:pointer; }
+  /* Leyenda */
+  .legend-box{ background:#fff; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.25); overflow:hidden; font-size:12px; }
+  .legend-toggle{ border:none; background:#fff; padding:7px 10px; font-size:12px; font-weight:600; cursor:pointer; width:100%; text-align:left; }
+  .legend-body{ padding:6px 10px 8px; border-top:1px solid #eee; }
+  .legend-row{ display:flex; align-items:center; gap:7px; padding:2px 0; }
+  .legend-dot{ width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.15); flex:0 0 auto; }
   @media (min-width:900px){ header p{font-size:13px;} }
   /* En móvil la lista pasa a ser un panel inferior (la mayoría entra desde el teléfono) */
   @media (max-width:640px){
@@ -209,6 +215,24 @@ function saveLocal(){ try{ localStorage.setItem(LS_REPORTS, JSON.stringify(repor
 const map = L.map("map").setView([40.383,-4.560], 10);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 map.on("click", e => openForm({lat:e.latlng.lat, lng:e.latlng.lng}));
+
+// ── Leyenda de colores (plegable) ────────────────────────────────────────────
+const legend = L.control({position:"bottomleft"});
+legend.onAdd = function(){
+  const div = L.DomUtil.create("div","legend-box");
+  const rows = ORDER.map(k=>`<div class="legend-row"><span class="legend-dot" style="background:${KINDS[k].color}"></span>${KINDS[k].emoji} ${KINDS[k].label}</div>`).join("");
+  div.innerHTML = `<button class="legend-toggle" id="legendToggle">ℹ️ Leyenda</button>
+    <div class="legend-body" id="legendBody" style="display:none">${rows}
+      <div class="legend-row" style="color:#9ca3af;margin-top:4px">Toca el mapa para añadir un aviso.</div>
+    </div>`;
+  L.DomEvent.disableClickPropagation(div);
+  div.querySelector("#legendToggle").onclick = ()=>{
+    const b = div.querySelector("#legendBody");
+    b.style.display = b.style.display==="none" ? "block" : "none";
+  };
+  return div;
+};
+legend.addTo(map);
 if(navigator.geolocation){
   navigator.geolocation.getCurrentPosition(
     p => map.setView([p.coords.latitude,p.coords.longitude],12),
