@@ -1,6 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Tabla para el mapa colaborativo de incendios.
 --  Cómo usar: entra en tu proyecto de Supabase → SQL Editor → pega esto → RUN.
+--  (Puedes pegarlo entero aunque ya lo hubieras ejecutado antes: es idempotente.)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 create table if not exists public.fire_reports (
@@ -19,7 +20,15 @@ create table if not exists public.fire_reports (
 create index if not exists idx_fire_reports_created on public.fire_reports (created_at desc);
 create index if not exists idx_fire_reports_status  on public.fire_reports (status, created_at desc);
 
--- Seguridad (RLS): todos pueden leer y añadir avisos; nadie puede borrar los ajenos.
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Seguridad (RLS)
+--  · Todos pueden LEER.
+--  · Todos pueden AÑADIR un aviso.
+--  · NADIE puede borrar ni reescribir el aviso de otro. La única modificación
+--    permitida —marcar "resuelto"— se hace por una función controlada (abajo),
+--    así que no hay policy de UPDATE directa: es imposible cambiar la nota,
+--    el tipo o mover las coordenadas de un aviso ajeno.
+-- ─────────────────────────────────────────────────────────────────────────────
 alter table public.fire_reports enable row level security;
 
 drop policy if exists fire_reports_select on public.fire_reports;
@@ -28,11 +37,32 @@ create policy fire_reports_select on public.fire_reports for select using (true)
 drop policy if exists fire_reports_insert on public.fire_reports;
 create policy fire_reports_insert on public.fire_reports for insert with check (true);
 
+-- Quitamos cualquier policy de UPDATE anterior (permitía reescribir avisos ajenos).
 drop policy if exists fire_reports_update_resolve on public.fire_reports;
-create policy fire_reports_update_resolve on public.fire_reports for update
-  using (true) with check (status in ('active','resolved'));
 
--- Tiempo real: que todos vean los avisos al instante.
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Marcar como resuelto: única modificación permitida.
+--  Función SECURITY DEFINER que SOLO cambia status a 'resolved' y NADA MÁS.
+--  Al no existir policy de UPDATE, esta es la puerta única y controlada.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.resolve_report(report_id uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.fire_reports
+     set status = 'resolved'
+   where id = report_id
+     and status = 'active';
+$$;
+
+revoke all on function public.resolve_report(uuid) from public;
+grant execute on function public.resolve_report(uuid) to anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Tiempo real: que todos vean los avisos al instante.
+-- ─────────────────────────────────────────────────────────────────────────────
 do $$
 begin
   if not exists (

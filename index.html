@@ -52,7 +52,14 @@
   .save:disabled { opacity:.5; }
   .leaflet-popup-content button { border:none; border-radius:6px; padding:6px; width:100%; margin-top:8px; background:#16a34a; color:#fff; font-weight:600; cursor:pointer; }
   @media (min-width:900px){ header p{font-size:13px;} }
-  @media (max-width:640px){ #side{ display:none; } }
+  /* En móvil la lista pasa a ser un panel inferior (la mayoría entra desde el teléfono) */
+  @media (max-width:640px){
+    #main{ flex-direction:column; }
+    #map{ flex:1 1 auto; }
+    #side{ width:auto; border-left:none; border-top:1px solid #e5e7eb;
+           flex:0 0 auto; max-height:38vh; box-shadow:0 -4px 12px rgba(0,0,0,.06); }
+    header h1{ font-size:16px; }
+  }
 </style>
 </head>
 <body>
@@ -99,8 +106,46 @@ const KINDS = {
   water:        { emoji:"💧", label:"Punto de agua",      color:"#0891b2" },
 };
 const ORDER = ["fire","road_blocked","help_needed","help_offered","safe","shelter","water"];
+
+// Caducidad por tipo (en horas). Pasado ese tiempo el aviso deja de mostrarse
+// en el mapa, para que la información siga siendo útil y no se acumule lo viejo.
+const TTL_HOURS = {
+  fire:12, road_blocked:12, help_needed:12,   // cambian rápido
+  help_offered:24, safe:24,                    // duran algo más
+  water:72, shelter:72,                        // recursos estables
+};
+const MAX_TTL_H = 72;
+function isFresh(r){
+  const h = TTL_HOURS[r.kind] || 24;
+  return (Date.now() - new Date(r.created_at).getTime()) < h*3600*1000;
+}
+
 const LS_REPORTS = "fire_reports_local_v1";
 const LS_AUTHOR  = "fire_reports_author";
+
+// ── Anti-spam básico (por dispositivo) ───────────────────────────────────────
+// No sustituye a un control en servidor, pero frena floods accidentales y bots
+// tontos: un mínimo entre avisos y un tope por ventana de tiempo.
+const LS_POSTS      = "fire_reports_post_times";
+const MIN_GAP_MS    = 15000;         // 15 s mínimo entre dos avisos
+const MAX_PER_WINDOW= 8;             // máx. avisos…
+const WINDOW_MS     = 10*60*1000;    // …cada 10 min
+function recentPosts(){ try{ return JSON.parse(localStorage.getItem(LS_POSTS)||"[]"); }catch(e){ return []; } }
+function canPost(){
+  const now = Date.now();
+  const times = recentPosts().filter(t => now - t < WINDOW_MS);
+  if(times.length && now - times[times.length-1] < MIN_GAP_MS)
+    return { ok:false, msg:"Espera unos segundos antes de publicar otro aviso." };
+  if(times.length >= MAX_PER_WINDOW)
+    return { ok:false, msg:"Has publicado muchos avisos seguidos. Prueba de nuevo en unos minutos." };
+  return { ok:true };
+}
+function markPosted(){
+  const now = Date.now();
+  const times = recentPosts().filter(t => now - t < WINDOW_MS);
+  times.push(now);
+  try{ localStorage.setItem(LS_POSTS, JSON.stringify(times)); }catch(e){}
+}
 
 const online = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 const sb = online ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -149,7 +194,7 @@ function pin(r){
 
 function render(){
   // marcadores
-  const visible = reports.filter(r => r.status==="active" && (filter==="all"||r.kind===filter));
+  const visible = reports.filter(r => r.status==="active" && isFresh(r) && (filter==="all"||r.kind===filter));
   const seen = new Set();
   visible.forEach(r=>{ seen.add(r.id); if(!markers.has(r.id)) pin(r); });
   for(const [id,m] of markers){ if(!seen.has(id)){ map.removeLayer(m); markers.delete(id); } }
@@ -171,13 +216,13 @@ function render(){
   // contadores en la barra
   ORDER.forEach(k=>{
     const b = document.querySelector('[data-filter="'+k+'"]');
-    if(b){ const n = reports.filter(r=>r.status==="active"&&r.kind===k).length;
+    if(b){ const n = reports.filter(r=>r.status==="active"&&isFresh(r)&&r.kind===k).length;
       b.textContent = KINDS[k].emoji+" "+KINDS[k].label+(n?` (${n})`:""); }
   });
 }
 window.flyTo = (lat,lng)=> map.setView([lat,lng],15);
 window.resolve = async (id)=>{
-  if(sb){ await sb.from("fire_reports").update({status:"resolved"}).eq("id",id); }
+  if(sb){ await sb.rpc("resolve_report",{report_id:id}); }
   else { const r=reports.find(x=>x.id===id); if(r){ r.status="resolved"; saveLocal(); render(); } }
   map.closePopup();
 };
@@ -227,6 +272,8 @@ function openForm(coords){
     <textarea id="note" rows="2" maxlength="500" placeholder="Ej: fuego avanzando hacia el camino del río"></textarea>
     <label>Tu nombre (opcional)</label>
     <input id="author" maxlength="60" value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
+    <input id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
+           style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
     <div class="actions">
       <button class="cancel" id="cancel">Cancelar</button>
       <button class="save" id="save">Publicar aviso</button>
@@ -245,6 +292,11 @@ function close(){ const ov=document.getElementById("ov"); if(ov) ov.remove(); pe
 
 async function submit(){
   if(!pending) return;
+  // Honeypot: si este campo oculto viene relleno, es un bot → lo descartamos en silencio.
+  if(document.getElementById("website").value){ close(); return; }
+  // Límite por dispositivo.
+  const gate = canPost();
+  if(!gate.ok){ alert(gate.msg); return; }
   const note = document.getElementById("note").value.trim();
   const author = document.getElementById("author").value.trim();
   try{ localStorage.setItem(LS_AUTHOR, author); }catch(e){}
@@ -253,7 +305,9 @@ async function submit(){
   if(sb){
     const {error} = await sb.from("fire_reports").insert(base);
     if(error){ alert("No se pudo guardar: "+error.message); btn.disabled=false; btn.textContent="Publicar aviso"; return; }
+    markPosted();
   } else {
+    markPosted();
     reports.unshift({ ...base, id:(crypto.randomUUID?crypto.randomUUID():Date.now()+""), created_at:new Date().toISOString(), status:"active" });
     saveLocal(); render();
   }
@@ -263,7 +317,8 @@ async function submit(){
 // ── Carga inicial + tiempo real ─────────────────────────────────────────────
 async function init(){
   if(sb){
-    const {data,error} = await sb.from("fire_reports").select("*").order("created_at",{ascending:false}).limit(500);
+    const since = new Date(Date.now()-MAX_TTL_H*3600*1000).toISOString();
+    const {data,error} = await sb.from("fire_reports").select("*").gte("created_at",since).order("created_at",{ascending:false}).limit(500);
     if(!error && data) reports = data;
     sb.channel("fire_reports_changes")
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"fire_reports"}, p=>{
@@ -283,6 +338,8 @@ async function init(){
   render();
 }
 init();
+// Refresco periódico: actualiza los "hace X min" y retira lo caducado sin recargar.
+setInterval(render, 60000);
 </script>
 </body>
 </html>
