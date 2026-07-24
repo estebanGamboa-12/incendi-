@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Mapa colaborativo de incendios</title>
+<meta name="description" content="Mapa gratuito y colaborativo para avisar en tiempo real de focos de incendio, zonas seguras, refugios y ayuda. Ante peligro, llama al 112." />
+
+<!-- Leaflet (mapa gratis, sin API key) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Supabase (colaboración en tiempo real) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  :root { --red:#dc2626; --red2:#b91c1c; --ink:#1f2937; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--ink); background:#f5f5f4; }
+  #app { display:flex; flex-direction:column; height:100%; }
+  header { background:linear-gradient(90deg,#b91c1c,#ea580c); color:#fff; padding:12px 16px; }
+  header h1 { margin:0; font-size:18px; }
+  header p { margin:4px 0 0; font-size:12px; opacity:.95; }
+  .warn { background:rgba(0,0,0,.18); border-radius:8px; padding:6px 10px; margin-top:8px; font-size:12px; font-weight:600; }
+  .bar { display:flex; gap:8px; padding:8px; overflow-x:auto; background:#fff; border-bottom:1px solid #e5e7eb; }
+  .bar button { white-space:nowrap; border:1px solid #e5e7eb; background:#fff; border-radius:999px; padding:7px 12px; font-size:13px; cursor:pointer; }
+  .bar button.active { background:#111827; color:#fff; border-color:#111827; }
+  .bar button.act { background:var(--red); color:#fff; border-color:var(--red); font-weight:600; }
+  #main { flex:1; display:flex; min-height:0; }
+  #map { flex:1; min-height:0; }
+  #side { width:300px; background:#fff; border-left:1px solid #e5e7eb; overflow-y:auto; padding:10px; }
+  #side h2 { font-size:13px; margin:0 0 8px; color:#374151; }
+  .item { width:100%; text-align:left; border:1px solid #f3f4f6; background:#fafafa; border-radius:12px; padding:8px; margin-bottom:8px; cursor:pointer; }
+  .item .row { display:flex; align-items:center; gap:6px; font-weight:600; font-size:13px; }
+  .item .ago { margin-left:auto; color:#9ca3af; font-weight:400; font-size:12px; }
+  .item .note { margin:4px 0 0; font-size:12px; color:#4b5563; }
+  .item .who { margin:2px 0 0; font-size:12px; color:#9ca3af; }
+  .empty { color:#9ca3af; font-size:13px; text-align:center; padding:20px 0; }
+  /* Modal */
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; padding:12px; z-index:2000; }
+  .modal { background:#fff; border-radius:16px; padding:16px; width:100%; max-width:420px; }
+  .modal h3 { margin:0 0 4px; }
+  .modal .coords { color:#9ca3af; font-size:12px; margin:0 0 8px; }
+  .kinds { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .kinds button { text-align:left; border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:8px; font-size:13px; cursor:pointer; }
+  .kinds button.sel { border-color:var(--red); background:#fef2f2; font-weight:600; }
+  label { display:block; font-size:13px; font-weight:600; margin:12px 0 4px; }
+  textarea, input { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:8px; font-size:14px; font-family:inherit; }
+  .actions { display:flex; gap:8px; margin-top:14px; }
+  .actions button { flex:1; border-radius:10px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; border:none; }
+  .cancel { background:#fff; border:1px solid #d1d5db !important; color:#4b5563; }
+  .save { background:var(--red); color:#fff; }
+  .save:disabled { opacity:.5; }
+  .leaflet-popup-content button { border:none; border-radius:6px; padding:6px; width:100%; margin-top:8px; background:#16a34a; color:#fff; font-weight:600; cursor:pointer; }
+  @media (min-width:900px){ header p{font-size:13px;} }
+  @media (max-width:640px){ #side{ display:none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🔥 Mapa colaborativo de incendios</h1>
+    <p>Avisa y consulta en tiempo real: focos de fuego, zonas seguras, refugios y ayuda.</p>
+    <div class="warn">⚠️ Ante peligro llama al <b>112</b>. Esta web NO sustituye a los servicios de emergencia.</div>
+  </header>
+
+  <div class="bar" id="bar">
+    <button class="act" id="btnLoc">📍 Marcar mi ubicación</button>
+    <button class="active" data-filter="all">Todos</button>
+    <!-- botones de filtro se generan por JS -->
+    <button id="btnShare">🔗 Compartir</button>
+  </div>
+
+  <div id="main">
+    <div id="map"></div>
+    <aside id="side">
+      <h2 id="sideTitle">Avisos recientes</h2>
+      <div id="list"><div class="empty">Cargando…</div></div>
+    </aside>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN — pega aquí tus datos de Supabase para que TODOS colaboren.
+//  (Supabase → Settings → API).  Si los dejas vacíos, funciona en "modo local"
+//  y los avisos solo se ven en TU dispositivo.
+// ═══════════════════════════════════════════════════════════════════════════
+const SUPABASE_URL = "https://grrmtvlwywzxlqapjyls.supabase.co"; // tu proyecto (ya rellenado)
+const SUPABASE_ANON_KEY = "";  // ← PEGA AQUÍ tu clave "anon public" (Supabase → Settings → API)
+
+// ── Tipos de aviso ──────────────────────────────────────────────────────────
+const KINDS = {
+  fire:         { emoji:"🔥", label:"Foco de incendio",   color:"#dc2626" },
+  road_blocked: { emoji:"⚠️", label:"Carretera cortada",  color:"#ea580c" },
+  help_needed:  { emoji:"🆘", label:"Necesito ayuda",     color:"#b91c1c" },
+  help_offered: { emoji:"🤝", label:"Ofrezco ayuda",      color:"#7c3aed" },
+  safe:         { emoji:"✅", label:"Zona segura",        color:"#16a34a" },
+  shelter:      { emoji:"🏠", label:"Refugio",            color:"#2563eb" },
+  water:        { emoji:"💧", label:"Punto de agua",      color:"#0891b2" },
+};
+const ORDER = ["fire","road_blocked","help_needed","help_offered","safe","shelter","water"];
+const LS_REPORTS = "fire_reports_local_v1";
+const LS_AUTHOR  = "fire_reports_author";
+
+const online = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+const sb = online ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+let reports = [];
+let filter = "all";
+let pending = null;         // {lat,lng} del punto elegido
+let selKind = "fire";
+const markers = new Map();
+
+// ── Utilidades ──────────────────────────────────────────────────────────────
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function ago(iso){
+  const s = Math.max(0, (Date.now()-new Date(iso).getTime())/1000|0);
+  if(s<60) return "ahora"; const m=s/60|0; if(m<60) return "hace "+m+" min";
+  const h=m/60|0; if(h<24) return "hace "+h+" h"; return "hace "+(h/24|0)+" d";
+}
+function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS_REPORTS)||"[]"); }catch(e){ return []; } }
+function saveLocal(){ try{ localStorage.setItem(LS_REPORTS, JSON.stringify(reports)); }catch(e){} }
+
+// ── Mapa ────────────────────────────────────────────────────────────────────
+const map = L.map("map").setView([40.4168,-3.7038], 6); // España por defecto
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+map.on("click", e => openForm({lat:e.latlng.lat, lng:e.latlng.lng}));
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(
+    p => map.setView([p.coords.latitude,p.coords.longitude],12),
+    ()=>{}, {enableHighAccuracy:true,timeout:8000});
+}
+
+function pin(r){
+  const k = KINDS[r.kind];
+  const icon = L.divIcon({className:"", iconSize:[34,34], iconAnchor:[17,34], popupAnchor:[0,-32],
+    html:`<div style="background:${k.color};width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;border:2px solid #fff;"><span style="transform:rotate(45deg);font-size:16px">${k.emoji}</span></div>`});
+  const m = L.marker([r.lat,r.lng],{icon}).addTo(map);
+  m.bindPopup(
+    `<div style="min-width:160px">
+       <strong>${k.emoji} ${k.label}</strong>
+       ${r.note?`<div style="margin:4px 0">${esc(r.note)}</div>`:""}
+       <div style="color:#888;font-size:12px">${ago(r.created_at)}</div>
+       ${r.author?`<div style="color:#888;font-size:12px">— ${esc(r.author)}</div>`:""}
+       <button onclick="resolve('${r.id}')">Marcar como resuelto</button>
+     </div>`);
+  markers.set(r.id, m);
+}
+
+function render(){
+  // marcadores
+  const visible = reports.filter(r => r.status==="active" && (filter==="all"||r.kind===filter));
+  const seen = new Set();
+  visible.forEach(r=>{ seen.add(r.id); if(!markers.has(r.id)) pin(r); });
+  for(const [id,m] of markers){ if(!seen.has(id)){ map.removeLayer(m); markers.delete(id); } }
+
+  // lista lateral
+  const list = document.getElementById("list");
+  const items = visible.slice(0,100);
+  document.getElementById("sideTitle").textContent = "Avisos recientes ("+items.length+")";
+  if(items.length===0){ list.innerHTML = '<div class="empty">Todavía no hay avisos.<br>Sé el primero en marcar.</div>'; return; }
+  list.innerHTML = items.map(r=>{
+    const k=KINDS[r.kind];
+    return `<div class="item" onclick="flyTo(${r.lat},${r.lng})">
+      <div class="row"><span>${k.emoji}</span><span>${k.label}</span><span class="ago">${ago(r.created_at)}</span></div>
+      ${r.note?`<div class="note">${esc(r.note)}</div>`:""}
+      ${r.author?`<div class="who">— ${esc(r.author)}</div>`:""}
+    </div>`;
+  }).join("");
+
+  // contadores en la barra
+  ORDER.forEach(k=>{
+    const b = document.querySelector('[data-filter="'+k+'"]');
+    if(b){ const n = reports.filter(r=>r.status==="active"&&r.kind===k).length;
+      b.textContent = KINDS[k].emoji+" "+KINDS[k].label+(n?` (${n})`:""); }
+  });
+}
+window.flyTo = (lat,lng)=> map.setView([lat,lng],15);
+window.resolve = async (id)=>{
+  if(sb){ await sb.from("fire_reports").update({status:"resolved"}).eq("id",id); }
+  else { const r=reports.find(x=>x.id===id); if(r){ r.status="resolved"; saveLocal(); render(); } }
+  map.closePopup();
+};
+
+// ── Barra de filtros ────────────────────────────────────────────────────────
+const bar = document.getElementById("bar");
+const shareBtn = document.getElementById("btnShare");
+ORDER.forEach(k=>{
+  const b=document.createElement("button");
+  b.dataset.filter=k; b.textContent=KINDS[k].emoji+" "+KINDS[k].label;
+  bar.insertBefore(b, shareBtn);
+});
+bar.addEventListener("click", e=>{
+  const f = e.target.dataset && e.target.dataset.filter;
+  if(!f) return;
+  filter = f;
+  bar.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active", x.dataset.filter===f));
+  render();
+});
+
+// ── Botones ─────────────────────────────────────────────────────────────────
+document.getElementById("btnLoc").onclick = ()=>{
+  if(!navigator.geolocation){ alert("Tu dispositivo no da ubicación. Toca el mapa para marcar."); return; }
+  navigator.geolocation.getCurrentPosition(
+    p=>{ const c={lat:p.coords.latitude,lng:p.coords.longitude}; map.setView([c.lat,c.lng],14); openForm(c); },
+    ()=> alert("No se pudo obtener tu ubicación. Toca el mapa para marcar el punto."),
+    {enableHighAccuracy:true,timeout:8000});
+};
+shareBtn.onclick = ()=>{
+  const url = location.href;
+  const txt = "🔥 Mapa colaborativo de incendios de nuestra zona. Añade y consulta avisos: "+url;
+  const wa = "https://wa.me/?text="+encodeURIComponent(txt);
+  if(navigator.share){ navigator.share({title:"Mapa de incendios", text:txt, url}).catch(()=>window.open(wa,"_blank")); }
+  else window.open(wa,"_blank");
+};
+
+// ── Formulario (modal) ──────────────────────────────────────────────────────
+function openForm(coords){
+  pending = coords; selKind = "fire";
+  const author = (function(){ try{ return localStorage.getItem(LS_AUTHOR)||""; }catch(e){ return ""; } })();
+  const ov = document.createElement("div"); ov.className="overlay"; ov.id="ov";
+  ov.innerHTML = `<div class="modal">
+    <h3>Nuevo aviso</h3>
+    <p class="coords">Punto: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</p>
+    <div class="kinds" id="kinds">${ORDER.map(k=>`<button data-k="${k}" class="${k==='fire'?'sel':''}">${KINDS[k].emoji} ${KINDS[k].label}</button>`).join("")}</div>
+    <label>Detalle (opcional)</label>
+    <textarea id="note" rows="2" maxlength="500" placeholder="Ej: fuego avanzando hacia el camino del río"></textarea>
+    <label>Tu nombre (opcional)</label>
+    <input id="author" maxlength="60" value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
+    <div class="actions">
+      <button class="cancel" id="cancel">Cancelar</button>
+      <button class="save" id="save">Publicar aviso</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov) close(); });
+  document.getElementById("kinds").addEventListener("click", e=>{
+    const k=e.target.dataset && e.target.dataset.k; if(!k) return; selKind=k;
+    document.querySelectorAll("#kinds button").forEach(b=>b.classList.toggle("sel", b.dataset.k===k));
+  });
+  document.getElementById("cancel").onclick = close;
+  document.getElementById("save").onclick = submit;
+}
+function close(){ const ov=document.getElementById("ov"); if(ov) ov.remove(); pending=null; }
+
+async function submit(){
+  if(!pending) return;
+  const note = document.getElementById("note").value.trim();
+  const author = document.getElementById("author").value.trim();
+  try{ localStorage.setItem(LS_AUTHOR, author); }catch(e){}
+  const btn = document.getElementById("save"); btn.disabled=true; btn.textContent="Guardando…";
+  const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null };
+  if(sb){
+    const {error} = await sb.from("fire_reports").insert(base);
+    if(error){ alert("No se pudo guardar: "+error.message); btn.disabled=false; btn.textContent="Publicar aviso"; return; }
+  } else {
+    reports.unshift({ ...base, id:(crypto.randomUUID?crypto.randomUUID():Date.now()+""), created_at:new Date().toISOString(), status:"active" });
+    saveLocal(); render();
+  }
+  close();
+}
+
+// ── Carga inicial + tiempo real ─────────────────────────────────────────────
+async function init(){
+  if(sb){
+    const {data,error} = await sb.from("fire_reports").select("*").order("created_at",{ascending:false}).limit(500);
+    if(!error && data) reports = data;
+    sb.channel("fire_reports_changes")
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"fire_reports"}, p=>{
+        if(!reports.some(x=>x.id===p.new.id)){ reports.unshift(p.new); render(); } })
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"fire_reports"}, p=>{
+        reports = reports.map(x=>x.id===p.new.id?p.new:x); render(); })
+      .subscribe();
+  } else {
+    reports = loadLocal();
+    // aviso de modo local
+    const h=document.querySelector("header");
+    const d=document.createElement("div"); d.className="warn";
+    d.style.background="rgba(0,0,0,.28)";
+    d.innerHTML="ℹ️ Modo local: los avisos solo se guardan en este dispositivo. Añade tus claves de Supabase en el código para que la gente colabore.";
+    h.appendChild(d);
+  }
+  render();
+}
+init();
+</script>
+</body>
+</html>
