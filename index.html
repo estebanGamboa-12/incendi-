@@ -112,8 +112,11 @@ const KINDS = {
   safe:         { emoji:"✅", label:"Zona segura",        color:"#16a34a" },
   shelter:      { emoji:"🏠", label:"Refugio",            color:"#2563eb" },
   water:        { emoji:"💧", label:"Punto de agua",      color:"#0891b2" },
+  custom:       { emoji:"📌", label:"Otro",               color:"#6b7280" },
 };
-const ORDER = ["fire","road_blocked","help_needed","help_offered","safe","shelter","water"];
+const ORDER = ["fire","road_blocked","help_needed","help_offered","safe","shelter","water","custom"];
+// Etiqueta que se muestra: si es "Otro", la escrita por el usuario.
+function labelOf(r){ return (r.kind==="custom" && r.custom_label) ? r.custom_label : KINDS[r.kind].label; }
 
 // Caducidad por tipo (en horas). Pasado ese tiempo el aviso deja de mostrarse
 // en el mapa, para que la información siga siendo útil y no se acumule lo viejo.
@@ -121,6 +124,7 @@ const TTL_HOURS = {
   fire:12, road_blocked:12, help_needed:12,   // cambian rápido
   help_offered:24, safe:24,                    // duran algo más
   water:72, shelter:72,                        // recursos estables
+  custom:48,                                   // personalizado
 };
 const MAX_TTL_H = 72;
 function isFresh(r){
@@ -131,6 +135,9 @@ function isFresh(r){
 const LS_REPORTS = "fire_reports_local_v1";
 const LS_AUTHOR  = "fire_reports_author";
 const LS_PHONE   = "fire_reports_phone";
+const LS_CONFIRMED = "fire_reports_confirmed"; // ids ya confirmados por este dispositivo
+function confirmedIds(){ try{ return JSON.parse(localStorage.getItem(LS_CONFIRMED)||"[]"); }catch(e){ return []; } }
+function alreadyConfirmed(id){ return confirmedIds().includes(id); }
 
 // ── Anti-spam básico (por dispositivo) ───────────────────────────────────────
 // No sustituye a un control en servidor, pero frena floods accidentales y bots
@@ -215,11 +222,13 @@ function pin(r){
   const m = L.marker([r.lat,r.lng],{icon}).addTo(map);
   m.bindPopup(
     `<div style="min-width:160px">
-       <strong>${k.emoji} ${k.label}</strong>
+       <strong>${k.emoji} ${esc(labelOf(r))}</strong>
+       ${r.capacity?`<div style="font-size:12px;color:#374151">🛏️ ${r.capacity} ${r.capacity==1?'persona':'personas'}</div>`:""}
        ${r.note?`<div style="margin:4px 0">${esc(r.note)}</div>`:""}
-       <div style="color:#888;font-size:12px">${ago(r.created_at)}</div>
+       <div style="color:#888;font-size:12px">${ago(r.created_at)}${r.confirms?` · ✔️ ${r.confirms} confirman`:""}</div>
        ${r.author?`<div style="color:#888;font-size:12px">— ${esc(r.author)}</div>`:""}
        ${contactHTML(r)}
+       <button style="background:#2563eb" onclick="confirmReport('${r.id}')" ${alreadyConfirmed(r.id)?"disabled":""}>👍 Confirmo${r.confirms?` (${r.confirms})`:""}</button>
        <button onclick="resolve('${r.id}')">Marcar como resuelto</button>
      </div>`);
   markers.set(r.id, m);
@@ -240,9 +249,10 @@ function render(){
   list.innerHTML = items.map(r=>{
     const k=KINDS[r.kind];
     return `<div class="item" onclick="flyTo(${r.lat},${r.lng})">
-      <div class="row"><span>${k.emoji}</span><span>${k.label}</span><span class="ago">${ago(r.created_at)}</span></div>
+      <div class="row"><span>${k.emoji}</span><span>${esc(labelOf(r))}</span><span class="ago">${ago(r.created_at)}</span></div>
+      ${r.capacity?`<div class="note">🛏️ ${r.capacity} ${r.capacity==1?'persona':'personas'}</div>`:""}
       ${r.note?`<div class="note">${esc(r.note)}</div>`:""}
-      ${r.author?`<div class="who">— ${esc(r.author)}</div>`:""}
+      ${r.author?`<div class="who">— ${esc(r.author)}${r.confirms?` · ✔️ ${r.confirms}`:""}</div>`:""}
       ${contactHTML(r)}
     </div>`;
   }).join("");
@@ -259,6 +269,16 @@ window.resolve = async (id)=>{
   if(sb){ await sb.rpc("resolve_report",{report_id:id}); }
   else { const r=reports.find(x=>x.id===id); if(r){ r.status="resolved"; saveLocal(); render(); } }
   map.closePopup();
+};
+window.confirmReport = async (id)=>{
+  if(alreadyConfirmed(id)) return;               // una vez por dispositivo
+  const done = confirmedIds(); done.push(id);
+  try{ localStorage.setItem(LS_CONFIRMED, JSON.stringify(done)); }catch(e){}
+  const r = reports.find(x=>x.id===id); if(r){ r.confirms=(r.confirms||0)+1; }
+  if(sb){ await sb.rpc("confirm_report",{report_id:id}); } else { saveLocal(); }
+  const m = markers.get(id); if(m){ map.removeLayer(m); markers.delete(id); } // re-pinta con el nuevo contador
+  map.closePopup();
+  render();
 };
 
 // ── Barra de filtros ────────────────────────────────────────────────────────
@@ -303,8 +323,14 @@ function openForm(coords){
     <h3>Nuevo aviso</h3>
     <p class="coords">Punto: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</p>
     <div class="kinds" id="kinds">${ORDER.map(k=>`<button data-k="${k}" class="${k==='fire'?'sel':''}">${KINDS[k].emoji} ${KINDS[k].label}</button>`).join("")}</div>
+    <div id="customWrap" style="display:none">
+      <label>¿Qué es? <span style="color:var(--red)">*</span></label>
+      <input id="customLabel" maxlength="40" placeholder="Ej: Tengo alimento · Cargo móviles · Tengo sitio para dormir" />
+    </div>
     <label>Detalle (opcional)</label>
     <textarea id="note" rows="2" maxlength="500" placeholder="Ej: fuego avanzando hacia el camino del río"></textarea>
+    <label>Nº de personas (opcional) <span style="font-weight:400;color:#9ca3af">— plazas para dormir, gente que necesita ayuda…</span></label>
+    <input id="capacity" type="number" min="0" max="9999" inputmode="numeric" placeholder="Ej: 4" />
     <label>Tu nombre <span style="color:var(--red)">*</span></label>
     <input id="author" maxlength="60" required value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
     <label>Teléfono (opcional) <span style="font-weight:400;color:#9ca3af">— para que puedan contactarte</span></label>
@@ -319,17 +345,22 @@ function openForm(coords){
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{ if(e.target===ov) close(); });
+  const customWrap = document.getElementById("customWrap");
+  const customEl   = document.getElementById("customLabel");
   document.getElementById("kinds").addEventListener("click", e=>{
     const k=e.target.dataset && e.target.dataset.k; if(!k) return; selKind=k;
     document.querySelectorAll("#kinds button").forEach(b=>b.classList.toggle("sel", b.dataset.k===k));
+    customWrap.style.display = (k==="custom") ? "block" : "none";
+    syncSave();
   });
   document.getElementById("cancel").onclick = close;
   document.getElementById("save").onclick = submit;
-  // El nombre es obligatorio: sin nombre, botón deshabilitado.
+  // Botón deshabilitado si falta el nombre (siempre) o la etiqueta de "Otro".
   const authorEl = document.getElementById("author");
   const saveEl = document.getElementById("save");
-  const syncSave = ()=> saveEl.disabled = !authorEl.value.trim();
+  const syncSave = ()=> saveEl.disabled = !authorEl.value.trim() || (selKind==="custom" && !customEl.value.trim());
   authorEl.addEventListener("input", syncSave);
+  customEl.addEventListener("input", syncSave);
   syncSave();
 }
 function close(){ const ov=document.getElementById("ov"); if(ov) ov.remove(); pending=null; }
@@ -344,10 +375,15 @@ async function submit(){
   const note = document.getElementById("note").value.trim();
   const author = document.getElementById("author").value.trim();
   const phone = document.getElementById("phone").value.trim();
+  const customLabel = document.getElementById("customLabel").value.trim();
+  const capRaw = document.getElementById("capacity").value.trim();
+  const capacity = capRaw ? Math.min(9999, Math.max(0, parseInt(capRaw,10)||0)) : null;
   if(!author){ alert("Pon tu nombre para publicar el aviso."); document.getElementById("author").focus(); return; }
+  if(selKind==="custom" && !customLabel){ alert("Escribe qué es (la etiqueta del aviso)."); document.getElementById("customLabel").focus(); return; }
   try{ localStorage.setItem(LS_AUTHOR, author); localStorage.setItem(LS_PHONE, phone); }catch(e){}
   const btn = document.getElementById("save"); btn.disabled=true; btn.textContent="Guardando…";
-  const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null, phone:phone||null };
+  const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null, phone:phone||null,
+                 custom_label:selKind==="custom"?customLabel:null, capacity:capacity, confirms:0 };
   if(sb){
     const {error} = await sb.from("fire_reports").insert(base);
     if(error){ alert("No se pudo guardar: "+error.message); btn.disabled=false; btn.textContent="Publicar aviso"; return; }
