@@ -37,11 +37,12 @@
   .empty { color:#9ca3af; font-size:13px; text-align:center; padding:20px 0; }
   /* Modal */
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; padding:12px; z-index:2000; }
-  .modal { background:#fff; border-radius:16px; padding:16px; width:100%; max-width:420px; }
+  .modal { background:#fff; border-radius:16px; padding:16px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto; }
   .modal h3 { margin:0 0 4px; }
   .modal .coords { color:#9ca3af; font-size:12px; margin:0 0 8px; }
   .kinds { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .kinds button { text-align:left; border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:8px; font-size:13px; cursor:pointer; }
+  .kinds button { display:flex; align-items:center; gap:7px; min-height:50px; text-align:left; border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:8px 10px; font-size:13px; line-height:1.2; cursor:pointer; }
+  .kinds button .emo { font-size:18px; flex:0 0 auto; }
   .kinds button.sel { border-color:var(--red); background:#fef2f2; font-weight:600; }
   label { display:block; font-size:13px; font-weight:600; margin:12px 0 4px; }
   textarea, input { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:8px; font-size:14px; font-family:inherit; }
@@ -384,7 +385,7 @@ function openForm(coords){
   ov.innerHTML = `<div class="modal">
     <h3>Nuevo aviso</h3>
     <p class="coords">Punto: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</p>
-    <div class="kinds" id="kinds">${ORDER.map(k=>`<button data-k="${k}" class="${k==='fire'?'sel':''}">${KINDS[k].emoji} ${KINDS[k].label}</button>`).join("")}</div>
+    <div class="kinds" id="kinds">${ORDER.map(k=>`<button data-k="${k}" class="${k==='fire'?'sel':''}"><span class="emo">${KINDS[k].emoji}</span><span>${KINDS[k].label}</span></button>`).join("")}</div>
     <div id="customWrap" style="display:none">
       <label>¿Qué es? <span style="color:var(--red)">*</span></label>
       <input id="customLabel" maxlength="40" placeholder="Ej: Tengo alimento · Cargo móviles · Tengo sitio para dormir" />
@@ -410,7 +411,8 @@ function openForm(coords){
   const customWrap = document.getElementById("customWrap");
   const customEl   = document.getElementById("customLabel");
   document.getElementById("kinds").addEventListener("click", e=>{
-    const k=e.target.dataset && e.target.dataset.k; if(!k) return; selKind=k;
+    const btn = e.target.closest("[data-k]"); if(!btn) return;
+    const k = btn.dataset.k; selKind=k;
     document.querySelectorAll("#kinds button").forEach(b=>b.classList.toggle("sel", b.dataset.k===k));
     customWrap.style.display = (k==="custom") ? "block" : "none";
     syncSave();
