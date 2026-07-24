@@ -75,7 +75,7 @@
     <p>Avisa y consulta en tiempo real: focos de fuego, zonas seguras, refugios y ayuda.</p>
     <div class="warn">⚠️ Ante peligro llama al <b>112</b>. Esta web NO sustituye a los servicios de emergencia.</div>
     <div class="warn" style="background:rgba(255,255,255,.16)">
-      📣 Para los vecinos de <b>Burgohondo</b>, <b>San Martín de Valdeiglesias</b> y <b>Pelayos de la Presa</b>:
+      📣 Para los vecinos de <b>Burgohondo</b>, <b>El Tiemblo</b>, <b>San Martín de Valdeiglesias</b> y <b>Pelayos de la Presa</b>:
       avisad y colaboremos con cabeza para ayudarnos unos a otros. He hecho lo que he podido. Gracias 💪
     </div>
   </header>
@@ -140,6 +140,23 @@ const LS_PHONE   = "fire_reports_phone";
 const LS_CONFIRMED = "fire_reports_confirmed"; // ids ya confirmados por este dispositivo
 function confirmedIds(){ try{ return JSON.parse(localStorage.getItem(LS_CONFIRMED)||"[]"); }catch(e){ return []; } }
 function alreadyConfirmed(id){ return confirmedIds().includes(id); }
+
+// Llave secreta del dispositivo (para borrar solo lo tuyo, sin registro).
+const LS_OWNER = "fire_reports_owner_key";
+function ownerToken(){
+  let t = null; try{ t = localStorage.getItem(LS_OWNER); }catch(e){}
+  if(!t){ t = (crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+Math.random())); try{ localStorage.setItem(LS_OWNER, t); }catch(e){} }
+  return t;
+}
+async function sha256hex(str){
+  try{
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }catch(e){ return null; } // navegador sin crypto.subtle (http): borrado quedará solo en modo local
+}
+let MY_HASH = null;
+sha256hex(ownerToken()).then(h=>{ MY_HASH = h; if(reports.length) render(); });
+function isMine(r){ return !!(MY_HASH && r.owner_hash && r.owner_hash === MY_HASH); }
 
 // ── Anti-spam básico (por dispositivo) ───────────────────────────────────────
 // No sustituye a un control en servidor, pero frena floods accidentales y bots
@@ -250,6 +267,7 @@ function pin(r){
        ${contactHTML(r)}
        <button style="background:#2563eb" onclick="confirmReport('${r.id}')" ${alreadyConfirmed(r.id)?"disabled":""}>👍 Confirmo${r.confirms?` (${r.confirms})`:""}</button>
        <button onclick="resolve('${r.id}')">Marcar como resuelto</button>
+       ${isMine(r)?`<button style="background:#dc2626" onclick="deleteMine('${r.id}')">🗑️ Borrar (es mío)</button>`:""}
      </div>`);
   markers.set(r.id, m);
 }
@@ -297,6 +315,18 @@ window.confirmReport = async (id)=>{
   const r = reports.find(x=>x.id===id); if(r){ r.confirms=(r.confirms||0)+1; }
   if(sb){ await sb.rpc("confirm_report",{report_id:id}); } else { saveLocal(); }
   const m = markers.get(id); if(m){ map.removeLayer(m); markers.delete(id); } // re-pinta con el nuevo contador
+  map.closePopup();
+  render();
+};
+window.deleteMine = async (id)=>{
+  if(!confirm("¿Borrar tu aviso? No se puede deshacer.")) return;
+  if(sb){
+    const {data,error} = await sb.rpc("delete_own_report",{report_id:id, token:ownerToken()});
+    if(error || data===false){ alert("No se pudo borrar (¿este aviso no es de este dispositivo?)."); return; }
+  }
+  reports = reports.filter(x=>x.id!==id);
+  if(!sb) saveLocal();
+  const m = markers.get(id); if(m){ map.removeLayer(m); markers.delete(id); }
   map.closePopup();
   render();
 };
@@ -402,8 +432,9 @@ async function submit(){
   if(selKind==="custom" && !customLabel){ alert("Escribe qué es (la etiqueta del aviso)."); document.getElementById("customLabel").focus(); return; }
   try{ localStorage.setItem(LS_AUTHOR, author); localStorage.setItem(LS_PHONE, phone); }catch(e){}
   const btn = document.getElementById("save"); btn.disabled=true; btn.textContent="Guardando…";
+  const ownerHash = MY_HASH || await sha256hex(ownerToken());
   const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null, phone:phone||null,
-                 custom_label:selKind==="custom"?customLabel:null, capacity:capacity, confirms:0 };
+                 custom_label:selKind==="custom"?customLabel:null, capacity:capacity, confirms:0, owner_hash:ownerHash };
   if(sb){
     const {error} = await sb.from("fire_reports").insert(base);
     if(error){ alert("No se pudo guardar: "+error.message); btn.disabled=false; btn.textContent="Publicar aviso"; return; }

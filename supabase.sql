@@ -8,8 +8,8 @@ create table if not exists public.fire_reports (
   id          uuid primary key default gen_random_uuid(),
   created_at  timestamptz not null default now(),
   kind        text not null
-                check (kind in ('fire','safe','shelter','help_needed',
-                                'help_offered','road_blocked','water','custom')),
+                check (kind in ('fire','safe','shelter','help_needed','help_offered',
+                                'road_blocked','water','custom')),
   lat         double precision not null check (lat between -90 and 90),
   lng         double precision not null check (lng between -180 and 180),
   note         text check (char_length(note) <= 500),
@@ -18,6 +18,7 @@ create table if not exists public.fire_reports (
   custom_label text check (char_length(custom_label) <= 40),  -- etiqueta libre para kind='custom'
   capacity     int  check (capacity >= 0 and capacity <= 9999),-- nº de personas (plazas para dormir, etc.)
   confirms     int  not null default 0,                        -- nº de confirmaciones de vecinos
+  owner_hash   text,                                           -- huella de la llave del autor (para borrar solo lo suyo)
   status      text not null default 'active' check (status in ('active','resolved'))
 );
 
@@ -26,6 +27,7 @@ alter table public.fire_reports add column if not exists phone        text;
 alter table public.fire_reports add column if not exists custom_label text;
 alter table public.fire_reports add column if not exists capacity     int;
 alter table public.fire_reports add column if not exists confirms     int not null default 0;
+alter table public.fire_reports add column if not exists owner_hash   text;
 
 -- Permitir el nuevo tipo 'custom' aunque la tabla ya existiera.
 alter table public.fire_reports drop constraint if exists fire_reports_kind_check;
@@ -116,6 +118,34 @@ $$;
 
 revoke all on function public.confirm_report(uuid) from public;
 grant execute on function public.confirm_report(uuid) to anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+--  Borrar SOLO lo tuyo, sin registro.
+--  El navegador guarda una llave secreta (localStorage) y en el aviso se guarda
+--  su huella SHA-256 (owner_hash). Para borrar hay que aportar la llave original:
+--  la función la hashea y solo borra si coincide. Conocer la huella NO sirve para
+--  borrar (haría falta la llave), así que es seguro aunque la huella sea pública.
+-- ─────────────────────────────────────────────────────────────────────────────
+create extension if not exists pgcrypto with schema extensions;
+
+create or replace function public.delete_own_report(report_id uuid, token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare n int;
+begin
+  delete from public.fire_reports
+   where id = report_id
+     and owner_hash is not null
+     and owner_hash = encode(digest(token, 'sha256'), 'hex');
+  get diagnostics n = row_count;
+  return n > 0;
+end $$;
+
+revoke all on function public.delete_own_report(uuid, text) from public;
+grant execute on function public.delete_own_report(uuid, text) to anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 --  Tiempo real: que todos vean los avisos al instante.
