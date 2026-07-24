@@ -107,26 +107,33 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // ── Tipos de aviso ──────────────────────────────────────────────────────────
 const KINDS = {
-  fire:         { emoji:"🔥", label:"Foco de incendio",   color:"#dc2626" },
-  road_blocked: { emoji:"⚠️", label:"Carretera cortada",  color:"#ea580c" },
-  help_needed:  { emoji:"🆘", label:"Necesito ayuda",     color:"#b91c1c" },
-  help_offered: { emoji:"🤝", label:"Ofrezco ayuda",      color:"#7c3aed" },
-  safe:         { emoji:"✅", label:"Zona segura",        color:"#16a34a" },
-  shelter:      { emoji:"🏠", label:"Refugio",            color:"#2563eb" },
-  water:        { emoji:"💧", label:"Punto de agua",      color:"#0891b2" },
-  custom:       { emoji:"📌", label:"Otro",               color:"#6b7280" },
+  fire:         { emoji:"🔥", label:"Foco de incendio",            color:"#dc2626" },
+  evacuate:     { emoji:"🔴", label:"Necesitamos evacuar",         color:"#e11d48" },
+  road_blocked: { emoji:"🚧", label:"Carretera bloqueada",         color:"#ea580c" },
+  help_needed:  { emoji:"🆘", label:"Necesito ayuda",              color:"#b91c1c" },
+  elderly:      { emoji:"👴", label:"Persona mayor o dependiente", color:"#9333ea" },
+  animals:      { emoji:"🐕", label:"Ayuda con animales",          color:"#a16207" },
+  medical:      { emoji:"🩹", label:"Conocimientos sanitarios",    color:"#db2777" },
+  car:          { emoji:"🚗", label:"Tengo coche y plazas",        color:"#0d9488" },
+  shelter:      { emoji:"🛏️", label:"Puedo alojar personas",       color:"#2563eb" },
+  supplies:     { emoji:"🔋", label:"Batería, agua o herramientas",color:"#ca8a04" },
+  help_offered: { emoji:"🤝", label:"Ofrezco ayuda",              color:"#7c3aed" },
+  safe:         { emoji:"🟢", label:"Estamos a salvo",             color:"#16a34a" },
+  water:        { emoji:"💧", label:"Punto de agua",              color:"#0891b2" },
+  custom:       { emoji:"📌", label:"Otro",                        color:"#6b7280" },
 };
-const ORDER = ["fire","road_blocked","help_needed","help_offered","safe","shelter","water","custom"];
+const ORDER = ["fire","evacuate","road_blocked","help_needed","elderly","animals","medical","car","shelter","supplies","help_offered","safe","water","custom"];
 // Etiqueta que se muestra: si es "Otro", la escrita por el usuario.
 function labelOf(r){ return (r.kind==="custom" && r.custom_label) ? r.custom_label : KINDS[r.kind].label; }
 
 // Caducidad por tipo (en horas). Pasado ese tiempo el aviso deja de mostrarse
 // en el mapa, para que la información siga siendo útil y no se acumule lo viejo.
 const TTL_HOURS = {
-  fire:12, road_blocked:12, help_needed:12,   // cambian rápido
-  help_offered:24, safe:24,                    // duran algo más
-  water:72, shelter:72,                        // recursos estables
-  custom:48,                                   // personalizado
+  fire:12, evacuate:12, road_blocked:12, help_needed:12,   // cambian rápido
+  elderly:12, animals:24, medical:24,                       // urgencias / apoyos
+  help_offered:24, car:24, safe:24, supplies:48,            // ofrecimientos
+  water:72, shelter:72,                                     // recursos estables
+  custom:48,                                                // personalizado
 };
 const MAX_TTL_H = 72;
 function isFresh(r){
@@ -236,7 +243,12 @@ legend.onAdd = function(){
   const rows = ORDER.map(k=>`<div class="legend-row"><span class="legend-dot" style="background:${KINDS[k].color}"></span>${KINDS[k].emoji} ${KINDS[k].label}</div>`).join("");
   div.innerHTML = `<button class="legend-toggle" id="legendToggle">ℹ️ Leyenda</button>
     <div class="legend-body" id="legendBody" style="display:none">${rows}
-      <div class="legend-row" style="color:#9ca3af;margin-top:4px">Toca el mapa para añadir un aviso.</div>
+      <div style="color:#6b7280;margin-top:8px;padding-top:6px;border-top:1px solid #eee;max-width:220px;line-height:1.35">
+        👆 Toca el mapa para añadir un aviso.<br>
+        🔑 Tus avisos van ligados a una <b>llave guardada en este navegador</b>. Solo desde
+        este dispositivo podrás <b>borrarlos</b>. Si entras desde otro móvil los verás igual,
+        pero no podrás borrar lo que creaste aquí (sí marcarlos como “resuelto”).
+      </div>
     </div>`;
   L.DomEvent.disableClickPropagation(div);
   div.querySelector("#legendToggle").onclick = ()=>{

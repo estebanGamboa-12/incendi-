@@ -8,8 +8,9 @@ create table if not exists public.fire_reports (
   id          uuid primary key default gen_random_uuid(),
   created_at  timestamptz not null default now(),
   kind        text not null
-                check (kind in ('fire','safe','shelter','help_needed','help_offered',
-                                'road_blocked','water','custom')),
+                check (kind in ('fire','evacuate','road_blocked','help_needed','elderly',
+                                'animals','medical','car','shelter','supplies','help_offered',
+                                'safe','water','custom')),
   lat         double precision not null check (lat between -90 and 90),
   lng         double precision not null check (lng between -180 and 180),
   note         text check (char_length(note) <= 500),
@@ -29,10 +30,11 @@ alter table public.fire_reports add column if not exists capacity     int;
 alter table public.fire_reports add column if not exists confirms     int not null default 0;
 alter table public.fire_reports add column if not exists owner_hash   text;
 
--- Permitir el nuevo tipo 'custom' aunque la tabla ya existiera.
+-- Permitir todos los tipos actuales aunque la tabla ya existiera.
 alter table public.fire_reports drop constraint if exists fire_reports_kind_check;
 alter table public.fire_reports add constraint fire_reports_kind_check
-  check (kind in ('fire','safe','shelter','help_needed','help_offered','road_blocked','water','custom'));
+  check (kind in ('fire','evacuate','road_blocked','help_needed','elderly','animals',
+                  'medical','car','shelter','supplies','help_offered','safe','water','custom'));
 
 do $$
 begin
