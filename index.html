@@ -68,6 +68,14 @@
     <h1>🔥 Mapa colaborativo de incendios</h1>
     <p>Avisa y consulta en tiempo real: focos de fuego, zonas seguras, refugios y ayuda.</p>
     <div class="warn">⚠️ Ante peligro llama al <b>112</b>. Esta web NO sustituye a los servicios de emergencia.</div>
+    <div class="warn" style="background:rgba(255,255,255,.16)">
+      📣 Para los vecinos de <b>Burgohondo</b>, <b>San Martín de Valdeiglesias</b> y <b>Pelayos de la Presa</b>:
+      avisad y colaboremos con cabeza para ayudarnos unos a otros. ¿Sugerencias o fallos? Escríbeme:
+      <a href="https://wa.me/34665274194?text=Feedback%20del%20mapa%20de%20incendios%3A%20"
+         target="_blank" rel="noopener"
+         style="color:#fff;font-weight:700;text-decoration:underline">💬 WhatsApp 665 27 41 94</a>.
+      He hecho lo que he podido. Gracias 💪
+    </div>
   </header>
 
   <div class="bar" id="bar">
@@ -189,7 +197,9 @@ function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS_REPORTS)||"
 function saveLocal(){ try{ localStorage.setItem(LS_REPORTS, JSON.stringify(reports)); }catch(e){} }
 
 // ── Mapa ────────────────────────────────────────────────────────────────────
-const map = L.map("map").setView([40.4168,-3.7038], 6); // España por defecto
+// Centro por defecto: zona de Burgohondo, San Martín de Valdeiglesias y Pelayos de la Presa.
+// (Si el usuario da permiso de ubicación, más abajo se recentra a su posición.)
+const map = L.map("map").setView([40.383,-4.560], 10);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 map.on("click", e => openForm({lat:e.latlng.lat, lng:e.latlng.lng}));
 if(navigator.geolocation){
