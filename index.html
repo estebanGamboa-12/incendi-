@@ -127,6 +127,24 @@ const ORDER = ["fire","evacuate","road_blocked","help_needed","elderly","animals
 // Etiqueta que se muestra: si es "Otro", la escrita por el usuario.
 function labelOf(r){ return (r.kind==="custom" && r.custom_label) ? r.custom_label : KINDS[r.kind].label; }
 
+// Ejemplo (placeholder) específico del campo "Detalle" según el tipo elegido.
+const HINTS = {
+  fire:         "Ej: fuego avanzando hacia el camino del río",
+  evacuate:     "Ej: hay que salir ya por la carretera de arriba",
+  road_blocked: "Ej: cortada por humo a la altura del puente",
+  help_needed:  "Ej: necesito ayuda para mover el ganado",
+  elderly:      "Ej: persona mayor sola, necesita que la recojan",
+  animals:      "Ej: 2 perros y un gato que sacar de casa",
+  medical:      "Ej: soy enfermero, puedo curar heridas leves",
+  car:          "Ej: salgo hacia Ávila en 20 min, caben 3",
+  shelter:      "Ej: tengo 4 camas libres, con baño",
+  supplies:     "Ej: tengo generador y garrafas de agua",
+  help_offered: "Ej: puedo ayudar en lo que haga falta",
+  safe:         "Ej: en el polideportivo estamos bien, hay sitio",
+  water:        "Ej: fuente/manguera disponible en la plaza",
+  custom:       "Ej: aclara aquí lo que ofreces o necesitas",
+};
+
 // Caducidad por tipo (en horas). Pasado ese tiempo el aviso deja de mostrarse
 // en el mapa, para que la información siga siendo útil y no se acumule lo viejo.
 const TTL_HOURS = {
@@ -415,6 +433,7 @@ function openForm(coords){
     const k = btn.dataset.k; selKind=k;
     document.querySelectorAll("#kinds button").forEach(b=>b.classList.toggle("sel", b.dataset.k===k));
     customWrap.style.display = (k==="custom") ? "block" : "none";
+    document.getElementById("note").placeholder = HINTS[k] || "Detalle (opcional)";
     syncSave();
   });
   document.getElementById("cancel").onclick = close;
