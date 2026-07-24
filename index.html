@@ -270,8 +270,8 @@ function openForm(coords){
     <div class="kinds" id="kinds">${ORDER.map(k=>`<button data-k="${k}" class="${k==='fire'?'sel':''}">${KINDS[k].emoji} ${KINDS[k].label}</button>`).join("")}</div>
     <label>Detalle (opcional)</label>
     <textarea id="note" rows="2" maxlength="500" placeholder="Ej: fuego avanzando hacia el camino del río"></textarea>
-    <label>Tu nombre (opcional)</label>
-    <input id="author" maxlength="60" value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
+    <label>Tu nombre <span style="color:var(--red)">*</span></label>
+    <input id="author" maxlength="60" required value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
     <input id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
            style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
     <div class="actions">
@@ -287,6 +287,12 @@ function openForm(coords){
   });
   document.getElementById("cancel").onclick = close;
   document.getElementById("save").onclick = submit;
+  // El nombre es obligatorio: sin nombre, botón deshabilitado.
+  const authorEl = document.getElementById("author");
+  const saveEl = document.getElementById("save");
+  const syncSave = ()=> saveEl.disabled = !authorEl.value.trim();
+  authorEl.addEventListener("input", syncSave);
+  syncSave();
 }
 function close(){ const ov=document.getElementById("ov"); if(ov) ov.remove(); pending=null; }
 
@@ -299,6 +305,7 @@ async function submit(){
   if(!gate.ok){ alert(gate.msg); return; }
   const note = document.getElementById("note").value.trim();
   const author = document.getElementById("author").value.trim();
+  if(!author){ alert("Pon tu nombre para publicar el aviso."); document.getElementById("author").focus(); return; }
   try{ localStorage.setItem(LS_AUTHOR, author); }catch(e){}
   const btn = document.getElementById("save"); btn.disabled=true; btn.textContent="Guardando…";
   const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null };

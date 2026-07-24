@@ -34,8 +34,11 @@ alter table public.fire_reports enable row level security;
 drop policy if exists fire_reports_select on public.fire_reports;
 create policy fire_reports_select on public.fire_reports for select using (true);
 
+-- El nombre (author) es OBLIGATORIO: no se puede publicar un aviso anónimo,
+-- ni siquiera saltándose el formulario.
 drop policy if exists fire_reports_insert on public.fire_reports;
-create policy fire_reports_insert on public.fire_reports for insert with check (true);
+create policy fire_reports_insert on public.fire_reports for insert
+  with check (author is not null and char_length(btrim(author)) > 0);
 
 -- Quitamos cualquier policy de UPDATE anterior (permitía reescribir avisos ajenos).
 drop policy if exists fire_reports_update_resolve on public.fire_reports;
