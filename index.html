@@ -122,6 +122,7 @@ function isFresh(r){
 
 const LS_REPORTS = "fire_reports_local_v1";
 const LS_AUTHOR  = "fire_reports_author";
+const LS_PHONE   = "fire_reports_phone";
 
 // ── Anti-spam básico (por dispositivo) ───────────────────────────────────────
 // No sustituye a un control en servidor, pero frena floods accidentales y bots
@@ -163,6 +164,27 @@ function ago(iso){
   if(s<60) return "ahora"; const m=s/60|0; if(m<60) return "hace "+m+" min";
   const h=m/60|0; if(h<24) return "hace "+h+" h"; return "hace "+(h/24|0)+" d";
 }
+// Teléfono → normaliza y arma el número para wa.me (añade 34 si es español sin prefijo).
+function normPhone(p){ return (p||"").replace(/[^\d+]/g,""); }
+function waNumber(p){
+  let n = normPhone(p).replace(/^\+/,"").replace(/^00/,"");
+  if(/^[679]\d{8}$/.test(n)) n = "34"+n;   // móvil/fijo español de 9 dígitos sin prefijo
+  return n;
+}
+// Botones de contacto para el popup y la lista: Cómo llegar (siempre) + WhatsApp/Llamar (si hay teléfono).
+function contactHTML(r){
+  const stop = 'onclick="event.stopPropagation()"';
+  const btn  = (bg)=>`display:block;text-align:center;text-decoration:none;background:${bg};color:#fff;border-radius:6px;padding:6px;margin-top:6px;font-weight:600;font-size:13px`;
+  const dir  = `https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}`;
+  let html = "";
+  if(r.phone){
+    const msg = encodeURIComponent("Hola, te escribo por el aviso del mapa de incendios ("+KINDS[r.kind].label+").");
+    html += `<a href="https://wa.me/${waNumber(r.phone)}?text=${msg}" target="_blank" rel="noopener" ${stop} style="${btn('#16a34a')}">💬 WhatsApp ${esc(r.phone)}</a>`;
+    html += `<a href="tel:${normPhone(r.phone)}" ${stop} style="${btn('#0891b2')}">📞 Llamar</a>`;
+  }
+  html += `<a href="${dir}" target="_blank" rel="noopener" ${stop} style="${btn('#2563eb')}">🧭 Cómo llegar</a>`;
+  return html;
+}
 function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS_REPORTS)||"[]"); }catch(e){ return []; } }
 function saveLocal(){ try{ localStorage.setItem(LS_REPORTS, JSON.stringify(reports)); }catch(e){} }
 
@@ -187,6 +209,7 @@ function pin(r){
        ${r.note?`<div style="margin:4px 0">${esc(r.note)}</div>`:""}
        <div style="color:#888;font-size:12px">${ago(r.created_at)}</div>
        ${r.author?`<div style="color:#888;font-size:12px">— ${esc(r.author)}</div>`:""}
+       ${contactHTML(r)}
        <button onclick="resolve('${r.id}')">Marcar como resuelto</button>
      </div>`);
   markers.set(r.id, m);
@@ -210,6 +233,7 @@ function render(){
       <div class="row"><span>${k.emoji}</span><span>${k.label}</span><span class="ago">${ago(r.created_at)}</span></div>
       ${r.note?`<div class="note">${esc(r.note)}</div>`:""}
       ${r.author?`<div class="who">— ${esc(r.author)}</div>`:""}
+      ${contactHTML(r)}
     </div>`;
   }).join("");
 
@@ -263,6 +287,7 @@ shareBtn.onclick = ()=>{
 function openForm(coords){
   pending = coords; selKind = "fire";
   const author = (function(){ try{ return localStorage.getItem(LS_AUTHOR)||""; }catch(e){ return ""; } })();
+  const phone  = (function(){ try{ return localStorage.getItem(LS_PHONE)||""; }catch(e){ return ""; } })();
   const ov = document.createElement("div"); ov.className="overlay"; ov.id="ov";
   ov.innerHTML = `<div class="modal">
     <h3>Nuevo aviso</h3>
@@ -272,6 +297,9 @@ function openForm(coords){
     <textarea id="note" rows="2" maxlength="500" placeholder="Ej: fuego avanzando hacia el camino del río"></textarea>
     <label>Tu nombre <span style="color:var(--red)">*</span></label>
     <input id="author" maxlength="60" required value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
+    <label>Teléfono (opcional) <span style="font-weight:400;color:#9ca3af">— para que puedan contactarte</span></label>
+    <input id="phone" type="tel" inputmode="tel" maxlength="30" value="${esc(phone)}" placeholder="Ej: 612 34 56 78" />
+    <p style="margin:4px 0 0;font-size:11px;color:#9ca3af">⚠️ Si lo pones, tu teléfono será <b>visible en el mapa</b> con un botón de WhatsApp. Útil para “ofrezco ayuda” o “punto de agua”.</p>
     <input id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
            style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
     <div class="actions">
@@ -305,10 +333,11 @@ async function submit(){
   if(!gate.ok){ alert(gate.msg); return; }
   const note = document.getElementById("note").value.trim();
   const author = document.getElementById("author").value.trim();
+  const phone = document.getElementById("phone").value.trim();
   if(!author){ alert("Pon tu nombre para publicar el aviso."); document.getElementById("author").focus(); return; }
-  try{ localStorage.setItem(LS_AUTHOR, author); }catch(e){}
+  try{ localStorage.setItem(LS_AUTHOR, author); localStorage.setItem(LS_PHONE, phone); }catch(e){}
   const btn = document.getElementById("save"); btn.disabled=true; btn.textContent="Guardando…";
-  const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null };
+  const base = { kind:selKind, lat:pending.lat, lng:pending.lng, note:note||null, author:author||null, phone:phone||null };
   if(sb){
     const {error} = await sb.from("fire_reports").insert(base);
     if(error){ alert("No se pudo guardar: "+error.message); btn.disabled=false; btn.textContent="Publicar aviso"; return; }

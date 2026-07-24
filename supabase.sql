@@ -14,8 +14,19 @@ create table if not exists public.fire_reports (
   lng         double precision not null check (lng between -180 and 180),
   note        text check (char_length(note) <= 500),
   author      text check (char_length(author) <= 60),
+  phone       text check (char_length(phone) <= 30),
   status      text not null default 'active' check (status in ('active','resolved'))
 );
+
+-- Para bases de datos creadas antes de añadir el teléfono (idempotente):
+alter table public.fire_reports add column if not exists phone text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname='fire_reports_phone_len') then
+    alter table public.fire_reports
+      add constraint fire_reports_phone_len check (char_length(phone) <= 30);
+  end if;
+end $$;
 
 create index if not exists idx_fire_reports_created on public.fire_reports (created_at desc);
 create index if not exists idx_fire_reports_status  on public.fire_reports (status, created_at desc);
