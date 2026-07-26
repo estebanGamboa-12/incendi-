@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>🔥 Mapa colaborativo de incendios — Burgohondo, El Tiemblo, San Martín, Pelayos, Villa del Prado</title>
-<meta name="description" content="Avisa y consulta en tiempo real: focos, cortes de carretera, evacuación, refugios, agua y ayuda entre vecinos. Ante peligro, llama al 112." />
+<title>🔥 Mapa colaborativo de incendios — Valle del Tiétar (Ávila) y entorno</title>
+<meta name="description" content="Avisa y consulta en tiempo real en todo el Valle del Tiétar: focos, cortes de carretera, evacuación, refugios, agua y ayuda entre vecinos. Ante peligro, llama al 112." />
 
 <!-- Vista previa al compartir (WhatsApp, redes) -->
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="Mapa colaborativo de incendios" />
-<meta property="og:title" content="🔥 Mapa colaborativo de incendios — Burgohondo, El Tiemblo, San Martín, Pelayos, Villa del Prado" />
-<meta property="og:description" content="Avisa y ayuda en tiempo real: focos, cortes, evacuación, refugios, agua y ayuda entre vecinos. Ante peligro, llama al 112." />
+<meta property="og:site_name" content="Mapa colaborativo de incendios — Valle del Tiétar" />
+<meta property="og:title" content="🔥 Mapa colaborativo de incendios — Valle del Tiétar (Ávila) y entorno" />
+<meta property="og:description" content="Avisa y ayuda en tiempo real en todo el Valle del Tiétar: focos, cortes, evacuación, refugios, agua y ayuda entre vecinos. Ante peligro, llama al 112." />
 <meta property="og:url" content="https://incendioeltiemblo.vercel.app/" />
 <meta property="og:image" content="https://incendioeltiemblo.vercel.app/og.png" />
 <meta property="og:image:type" content="image/png" />
@@ -18,8 +18,8 @@
 <meta property="og:image:height" content="630" />
 <meta property="og:locale" content="es_ES" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="🔥 Mapa colaborativo de incendios" />
-<meta name="twitter:description" content="Avisa y ayuda en tiempo real. Zona de Burgohondo, El Tiemblo, San Martín, Pelayos, Villa del Prado." />
+<meta name="twitter:title" content="🔥 Mapa colaborativo de incendios — Valle del Tiétar" />
+<meta name="twitter:description" content="Avisa y ayuda en tiempo real en todo el Valle del Tiétar (Ávila) y su entorno. Focos, cortes, evacuación, refugios, agua y ayuda entre vecinos." />
 <meta name="twitter:image" content="https://incendioeltiemblo.vercel.app/og.png" />
 
 <!-- Leaflet (mapa gratis, sin API key) -->
@@ -56,6 +56,8 @@
   .modal { background:#fff; border-radius:16px; padding:16px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto; }
   .modal h3 { margin:0 0 4px; }
   .modal .coords { color:#9ca3af; font-size:12px; margin:0 0 8px; }
+  .reqnote { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; border-radius:10px; padding:8px 10px; font-size:12.5px; line-height:1.4; margin:8px 0 4px; }
+  .savehint { margin:8px 0 0; text-align:center; font-size:12.5px; font-weight:600; color:#6b7280; }
   .kinds { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .kinds button { display:flex; align-items:center; gap:7px; min-height:50px; text-align:left; border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:8px 10px; font-size:13px; line-height:1.2; cursor:pointer; }
   .kinds button .emo { font-size:18px; flex:0 0 auto; }
@@ -92,8 +94,20 @@
     <p>Avisa y consulta en tiempo real: focos de fuego, zonas seguras, refugios y ayuda.</p>
     <div class="warn">⚠️ Ante peligro llama al <b>112</b>. Esta web NO sustituye a los servicios de emergencia.</div>
     <div class="warn" style="background:rgba(255,255,255,.16)">
-      📣 Para los vecinos de <b>Burgohondo</b>, <b>El Tiemblo</b>, <b>San Martín de Valdeiglesias</b>, <b>Pelayos de la Presa</b> y <b>Villa del Prado</b>:
-      avisad y colaboremos con cabeza para ayudarnos unos a otros. He hecho lo que he podido. Gracias 💪
+      📣 Para los vecinos de <b>todo el Valle del Tiétar</b> (Ávila) y su entorno:
+      avisad y colaboremos con cabeza para ayudarnos unos a otros. Cuantos más pueblos, mejor. He hecho lo que he podido. Gracias 💪
+      <button type="button" id="townsToggle"
+        style="display:block;margin-top:6px;background:none;border:none;color:#fff;text-decoration:underline;font-size:12px;padding:0;cursor:pointer;font-weight:600">
+        Ver pueblos incluidos ▾
+      </button>
+      <div id="townsList" style="display:none;margin-top:6px;font-weight:400;font-size:12px;line-height:1.5;opacity:.95">
+        La Adrada · Piedralaves · Casavieja · Mijares · Gavilanes · Pedro Bernardo · Sotillo de la Adrada ·
+        Santa María del Tiétar · Higuera de las Dueñas · Fresnedilla · Navahondilla · Casillas ·
+        Lanzahíta · Arenas de San Pedro · El Arenal · Guisando · El Hornillo · Poyales del Hoyo ·
+        Candeleda · Mombeltrán · Cuevas del Valle · Villarejo del Valle · San Esteban del Valle ·
+        Santa Cruz del Valle · Burgohondo · El Tiemblo · Cebreros · San Martín de Valdeiglesias ·
+        Pelayos de la Presa · Villa del Prado <b>y todo el valle.</b>
+      </div>
     </div>
   </header>
 
@@ -264,10 +278,22 @@ function contactHTML(r){
 function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS_REPORTS)||"[]"); }catch(e){ return []; } }
 function saveLocal(){ try{ localStorage.setItem(LS_REPORTS, JSON.stringify(reports)); }catch(e){} }
 
+// ── Desplegable de pueblos en la cabecera ────────────────────────────────────
+(function(){
+  const t = document.getElementById("townsToggle");
+  const l = document.getElementById("townsList");
+  if(t && l) t.onclick = ()=>{
+    const open = l.style.display==="none";
+    l.style.display = open ? "block" : "none";
+    t.textContent = open ? "Ocultar pueblos ▴" : "Ver pueblos incluidos ▾";
+  };
+})();
+
 // ── Mapa ────────────────────────────────────────────────────────────────────
-// Centro por defecto: zona de Burgohondo, San Martín de Valdeiglesias y Pelayos de la Presa.
+// Centro por defecto: encuadra todo el Valle del Tiétar, de Candeleda (oeste) a
+// Villa del Prado (este), pasando por Arenas de San Pedro, La Adrada y El Tiemblo.
 // (Si el usuario da permiso de ubicación, más abajo se recentra a su posición.)
-const map = L.map("map").setView([40.383,-4.560], 10);
+const map = L.map("map").setView([40.28,-4.75], 9);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 map.on("click", e => openForm({lat:e.latlng.lat, lng:e.latlng.lng}));
 
@@ -404,7 +430,7 @@ document.getElementById("btnLoc").onclick = ()=>{
 };
 shareBtn.onclick = ()=>{
   const url = location.href;
-  const txt = "🔥 Mapa colaborativo de incendios de nuestra zona. Añade y consulta avisos: "+url;
+  const txt = "🔥 Mapa colaborativo de incendios del Valle del Tiétar. Añade y consulta avisos: "+url;
   const wa = "https://wa.me/?text="+encodeURIComponent(txt);
   if(navigator.share){ navigator.share({title:"Mapa de incendios", text:txt, url}).catch(()=>window.open(wa,"_blank")); }
   else window.open(wa,"_blank");
@@ -419,6 +445,8 @@ function openForm(coords){
   ov.innerHTML = `<div class="modal">
     <h3>Nuevo aviso</h3>
     <p class="coords">Punto: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</p>
+    <div class="reqnote">Solo hacen falta <b>2 cosas</b> para publicar: elige un <b>tipo</b> y pon <b>tu nombre</b>. Lo demás es opcional. Los campos con <span style="color:var(--red)">*</span> son obligatorios.</div>
+    <label>1) ¿Qué quieres avisar? <span style="color:var(--red)">*</span></label>
     <div class="kinds" id="kinds">${ORDER.map(k=>`<button data-k="${k}" class="${k==='fire'?'sel':''}"><span class="emo">${KINDS[k].emoji}</span><span>${KINDS[k].label}</span></button>`).join("")}</div>
     <div id="customWrap" style="display:none">
       <label>¿Qué es? <span style="color:var(--red)">*</span></label>
@@ -428,7 +456,7 @@ function openForm(coords){
     <textarea id="note" rows="2" maxlength="500" placeholder="Ej: fuego avanzando hacia el camino del río"></textarea>
     <label>Nº de personas (opcional) <span style="font-weight:400;color:#9ca3af">— plazas para dormir, gente que necesita ayuda…</span></label>
     <input id="capacity" type="number" min="0" max="9999" inputmode="numeric" placeholder="Ej: 4" />
-    <label>Tu nombre <span style="color:var(--red)">*</span></label>
+    <label>2) Tu nombre <span style="color:var(--red)">*</span></label>
     <input id="author" maxlength="60" required value="${esc(author)}" placeholder="Ej: Vecino de la calle Mayor" />
     <label>Teléfono (opcional) <span style="font-weight:400;color:#9ca3af">— para que puedan contactarte</span></label>
     <input id="phone" type="tel" inputmode="tel" maxlength="30" value="${esc(phone)}" placeholder="Ej: 612 34 56 78" />
@@ -439,6 +467,7 @@ function openForm(coords){
       <button class="cancel" id="cancel">Cancelar</button>
       <button class="save" id="save">Publicar aviso</button>
     </div>
+    <p class="savehint" id="saveHint"></p>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{ if(e.target===ov) close(); });
@@ -455,9 +484,18 @@ function openForm(coords){
   document.getElementById("cancel").onclick = close;
   document.getElementById("save").onclick = submit;
   // Botón deshabilitado si falta el nombre (siempre) o la etiqueta de "Otro".
+  // Además mostramos QUÉ falta, para que no quede en "no puedo enviar y no sé por qué".
   const authorEl = document.getElementById("author");
   const saveEl = document.getElementById("save");
-  const syncSave = ()=> saveEl.disabled = !authorEl.value.trim() || (selKind==="custom" && !customEl.value.trim());
+  const hintEl = document.getElementById("saveHint");
+  const syncSave = ()=>{
+    const needName   = !authorEl.value.trim();
+    const needCustom = (selKind==="custom" && !customEl.value.trim());
+    saveEl.disabled = needName || needCustom;
+    if(needCustom)      hintEl.textContent = "✏️ Escribe qué es (arriba, en “¿Qué es?”) para poder publicar.";
+    else if(needName)   hintEl.textContent = "✏️ Escribe tu nombre para poder publicar.";
+    else                hintEl.textContent = "✅ Listo para publicar.";
+  };
   authorEl.addEventListener("input", syncSave);
   customEl.addEventListener("input", syncSave);
   syncSave();

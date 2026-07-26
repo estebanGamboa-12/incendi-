@@ -1,6 +1,11 @@
-# 🔥 Mapa colaborativo de incendios
+# 🔥 Mapa colaborativo de incendios — Valle del Tiétar
 
-Web **gratis** y **en un solo archivo** para emergencias por incendio.
+Web **gratis** y **en un solo archivo** para emergencias por incendio en **todo el
+Valle del Tiétar** (Ávila) y su entorno: La Adrada, Piedralaves, Casavieja, Sotillo
+de la Adrada, Arenas de San Pedro, Candeleda, Mombeltrán, Pedro Bernardo, Lanzahíta,
+Burgohondo, El Tiemblo, Cebreros, San Martín de Valdeiglesias, Pelayos de la Presa,
+Villa del Prado… y todos los pueblos del valle.
+
 Cualquiera puede, sin registrarse, avisar y ver en **tiempo real** sobre un mapa:
 
 🔥 Focos de incendio · ⚠️ Carreteras cortadas · 🆘 Necesito ayuda ·
