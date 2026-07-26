@@ -11,8 +11,8 @@
 <meta property="og:site_name" content="Mapa colaborativo de incendios — Valle del Tiétar" />
 <meta property="og:title" content="🔥 Mapa colaborativo de incendios — Valle del Tiétar (Ávila) y entorno" />
 <meta property="og:description" content="Avisa y ayuda en tiempo real en todo el Valle del Tiétar: focos, cortes, evacuación, refugios, agua y ayuda entre vecinos. Ante peligro, llama al 112." />
-<meta property="og:url" content="https://incendioeltiemblo.vercel.app/" />
-<meta property="og:image" content="https://incendioeltiemblo.vercel.app/og.png" />
+<meta property="og:url" content="https://incendiostietar.vercel.app/" />
+<meta property="og:image" content="https://incendiostietar.vercel.app/og.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
@@ -96,18 +96,6 @@
     <div class="warn" style="background:rgba(255,255,255,.16)">
       📣 Para los vecinos de <b>todo el Valle del Tiétar</b> (Ávila) y su entorno:
       avisad y colaboremos con cabeza para ayudarnos unos a otros. Cuantos más pueblos, mejor. He hecho lo que he podido. Gracias 💪
-      <button type="button" id="townsToggle"
-        style="display:block;margin-top:6px;background:none;border:none;color:#fff;text-decoration:underline;font-size:12px;padding:0;cursor:pointer;font-weight:600">
-        Ver pueblos incluidos ▾
-      </button>
-      <div id="townsList" style="display:none;margin-top:6px;font-weight:400;font-size:12px;line-height:1.5;opacity:.95">
-        La Adrada · Piedralaves · Casavieja · Mijares · Gavilanes · Pedro Bernardo · Sotillo de la Adrada ·
-        Santa María del Tiétar · Higuera de las Dueñas · Fresnedilla · Navahondilla · Casillas ·
-        Lanzahíta · Arenas de San Pedro · El Arenal · Guisando · El Hornillo · Poyales del Hoyo ·
-        Candeleda · Mombeltrán · Cuevas del Valle · Villarejo del Valle · San Esteban del Valle ·
-        Santa Cruz del Valle · Burgohondo · El Tiemblo · Cebreros · San Martín de Valdeiglesias ·
-        Pelayos de la Presa · Villa del Prado <b>y todo el valle.</b>
-      </div>
     </div>
   </header>
 
@@ -277,17 +265,6 @@ function contactHTML(r){
 }
 function loadLocal(){ try{ return JSON.parse(localStorage.getItem(LS_REPORTS)||"[]"); }catch(e){ return []; } }
 function saveLocal(){ try{ localStorage.setItem(LS_REPORTS, JSON.stringify(reports)); }catch(e){} }
-
-// ── Desplegable de pueblos en la cabecera ────────────────────────────────────
-(function(){
-  const t = document.getElementById("townsToggle");
-  const l = document.getElementById("townsList");
-  if(t && l) t.onclick = ()=>{
-    const open = l.style.display==="none";
-    l.style.display = open ? "block" : "none";
-    t.textContent = open ? "Ocultar pueblos ▴" : "Ver pueblos incluidos ▾";
-  };
-})();
 
 // ── Mapa ────────────────────────────────────────────────────────────────────
 // Centro por defecto: encuadra todo el Valle del Tiétar, de Candeleda (oeste) a
